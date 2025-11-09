@@ -14,6 +14,8 @@ export class AuthService {
   ) {}
   async validateLocalUser(createAuthDto: Prisma.UserCreateInput) {
     const { email, password } = createAuthDto;
+    console.log('AuthService.validateLocalUser called2 ');
+
     if (!email || !password) {
       throw new HttpException(
         {
@@ -23,6 +25,7 @@ export class AuthService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new HttpException(
@@ -34,11 +37,21 @@ export class AuthService {
       );
     }
 
-    const isPasswordValid = await verify(user?.password ?? '', password);
-    if (!isPasswordValid) {
+    try {
+      const isPasswordValid = await verify(user?.password ?? '', password);
+      if (!isPasswordValid) {
+        throw new HttpException(
+          {
+            message: 'Invalid email or password',
+            error: 'Unauthorized',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+    } catch (err) {
       throw new HttpException(
         {
-          message: 'Invalid email or password',
+          message: 'Error verifying password',
           error: 'Unauthorized',
         },
         HttpStatus.UNAUTHORIZED,

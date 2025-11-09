@@ -1,26 +1,137 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { UpdateAuthDto } from './dto/update-auth.dto';
-
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma, User } from '@prisma/client';
+import { verify, hash } from 'argon2';
+import { AuthJwtPayload } from 'shared/types';
+import { JwtService } from '@nestjs/jwt';
 @Injectable()
 export class AuthService {
-  create(createAuthDto: CreateAuthDto) {
-    return 'This action adds a new auth';
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
+  async validateLocalUser(createAuthDto: Prisma.UserCreateInput) {
+    const { email, password } = createAuthDto;
+    if (!email || !password) {
+      throw new HttpException(
+        {
+          message: 'Email and password are required',
+          error: 'Bad Request',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new HttpException(
+        {
+          message: 'Invalid email or password',
+          error: 'Unauthorized',
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const isPasswordValid = await verify(user?.password ?? '', password);
+    if (!isPasswordValid) {
+      throw new HttpException(
+        {
+          message: 'Invalid email or password',
+          error: 'Unauthorized',
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    return await this.login(user);
   }
 
-  findAll() {
-    return `This action returns all auth`;
+  async login(user: User) {
+    const tokens = await this.generateTokens(user.id);
+    return { ...user, ...tokens };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} auth`;
+  async generateTokens(userId: number) {
+    const payload: AuthJwtPayload = { userId: userId };
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: '24h',
+    });
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      expiresIn: '7d',
+    });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { refreshToken: await hash(refreshToken) },
+    });
+
+    return { accessToken, refreshToken };
   }
 
-  update(id: number, updateAuthDto: UpdateAuthDto) {
-    return `This action updates a #${id} auth`;
+  async validateJwtUser(userId: number) {
+    // Passport JWT validate callback
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new HttpException(
+        {
+          message: 'User not found',
+          error: 'Unauthorized',
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const { refreshToken, password, ...rest } = user;
+    return rest;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} auth`;
+  async refreshToken(oldAccessToken: string) {
+    try {
+      // 1. Decode old access token (we only need userId)
+      const payload = this.jwtService.decode(
+        oldAccessToken,
+      ) as AuthJwtPayload | null;
+      if (!payload?.userId) {
+        throw new HttpException(
+          {
+            message: 'Invalid token payload',
+            error: 'Unauthorized',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      // 2. Get user and check refresh token
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.userId },
+      });
+
+      if (!user || !user.refreshToken) {
+        throw new HttpException(
+          {
+            message: 'No refresh token found',
+            error: 'Unauthorized',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      // 3. (Optional) You can verify that stored refresh token hasn’t expired
+      // But since JWT handles expiry internally, this is usually enough.
+
+      // 4. Generate new tokens
+      const { accessToken, refreshToken } = await this.generateTokens(user.id);
+
+      return { accessToken, refreshToken };
+    } catch {
+      throw new HttpException(
+        {
+          message: 'Could not refresh token',
+          error: 'Unauthorized',
+        },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 }

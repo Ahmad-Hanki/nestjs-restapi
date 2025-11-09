@@ -1,0 +1,90 @@
+install 
+npm i argon2 @nestjs/jwt @nestjs/passport passport passport-jwt @nestjs/config
+npm i -D @types/passport-jwt
+
+
+// create the prisma server and module and init it
+apps\restapi\src\prisma\prisma.service.ts
+apps\restapi\src\prisma\prisma.module.ts
+
+// create the user resources with crud
+// create the custom response and custom exertion
+
+apps\restapi\shared\response.interceptor.ts
+apps\restapi\shared\all-exceptions.filter.ts
+and implementing them in the main apps\restapi\src\main.ts
+
+// create the login logic with generating access token and refresh tokens
+apps\restapi\src\auth\auth.service.ts
+
+// now create the jwt strategy 
+apps\restapi\src\auth\guards\strategies\jwt.strategy.ts
+
+now create the guard .. only rest apis
+apps\restapi\src\auth\guards\jwt-auth.guard.ts
+
+CurrentUser decorator
+apps\restapi\shared\decorators\current-user.decorator.ts
+
+// roles decorator
+apps\restapi\shared\decorators\roles.decorator.ts
+
+### 10) Using guards in resolvers (examples)
+
+/// ADMIN only
+ @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Delete(':id')
+  async deleteUser(@Param('id') id: string) {
+    return this.userService.delete(Number(id));
+  }
+
+
+  /// 2️⃣ Admin OR the user themself
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async updateUser(
+    @CurrentUser() user,
+    @Param('id') id: string,
+    @Body() updateUserDto: any, // replace with proper DTO
+  ) {
+    if (user.role !== 'ADMIN' && user.id !== Number(id)) {
+      throw new ForbiddenException('Not allowed');
+    }
+    return this.userService.update(Number(id), updateUserDto);
+  }
+
+  3️⃣ Authenticated-only route (any role)
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  me(@CurrentUser() user) {
+    return user;
+  }
+
+// auth module rewriting
+apps/api/src/auth/auth.module.ts
+
+
+hybrid jwt auth
+apps\restapi\src\auth\guards\jwt-auth-optional.guard.ts
+usage:
+
+@UseGuards(OptionalJwtAuthGuard)
+ @Get(':id')
+  async getPost(@Param('id') id: string, @CurrentUser() user) {
+    const post = await this.postService.getPostWithLikes(Number(id));
+
+    let likedByUser = false;
+    if (user) {
+      likedByUser = await this.postService.checkIfUserLikedPost(user.id, Number(id));
+    }
+
+    return {
+      ...post,
+      likedByUser, // true or false, only if user is authenticated
+    };
+}
+
+
+
+// JWT_SECRET in the env fil

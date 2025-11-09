@@ -52,7 +52,9 @@ export class UserService {
     }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  findOne(id: number, user: Prisma.UserGetPayload<{}>) {
+    return {
+      user: user?.name ?? 'No User',
+    };
   }
 }

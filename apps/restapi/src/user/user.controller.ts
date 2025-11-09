@@ -30,9 +30,6 @@ export class UserController {
 
   // @UseGuards(OptionalJwtAuthGuard)  // any user including unauthenticated
   // @CurrentUser() user; // inside the method
-  
-
-
 
   // @UseGuards(JwtAuthGuard, RolesGuard) only admin
   // @Roles('ADMIN')
@@ -40,12 +37,18 @@ export class UserController {
   // @UseGuards(JwtAuthGuard) // any logged in user
 
   // @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard) // any logged in user
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUser() user) {
+  @UseGuards(OptionalJwtAuthGuard) // any user including unauthenticated
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: Prisma.UserGetPayload<{}>,
+  ) {
     // if (user.role !== 'ADMIN' && user.id !== Number(id)) {
     //   throw new ForbiddenException('Not allowed');
     //   only admin or owner if they are authenticated
     // }
-    return this.userService.findOne(+id);
+
+    return this.userService.findOne(+id, user);
   }
 }

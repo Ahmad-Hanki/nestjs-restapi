@@ -1,5 +1,5 @@
 {
-  "name": "my-turborepo",
+  "name": "nset-js-restapi",
   "private": true,
   "scripts": {
     "build": "turbo run build",

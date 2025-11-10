@@ -147,4 +147,23 @@ export class AuthService {
       );
     }
   }
+
+  async validateGoogleUser(googleUser: Prisma.UserCreateInput) {
+    let user = await this.prisma.user.findUnique({
+      where: { email: googleUser.email },
+    });
+
+    if (user) {
+      const { password, refreshToken, ...rest } = user;
+      return rest;
+    } else {
+      const newUser = await this.prisma.user.create({
+        data: {
+          ...googleUser,
+        },
+      });
+      const { password, refreshToken, ...rest } = newUser;
+      return rest;
+    }
+  }
 }

@@ -49,6 +49,7 @@ export class UserController {
     //   only admin or owner if they are authenticated
     // }
 
+    
     return this.userService.findOne(+id, user);
   }
 }
